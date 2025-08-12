@@ -3,7 +3,7 @@
 # #1654).
 [submodule "binutils"]
 	path = binutils
-	url = https://github.com/bminor/binutils-gdb.git
+	url = https://github.com/Little-W/binutils-gdb.git
 	branch = binutils-2_44-branch
 	shallow = true
 [submodule "gcc"]

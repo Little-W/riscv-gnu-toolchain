@@ -12,7 +12,6 @@ on:
 env:
   submodule_paths: |
     binutils
-    dejagnu
     gcc
     gdb
     glibc
@@ -23,7 +22,6 @@ env:
     qemu
     spike
     uclibc-ng
-    .git/modules
 
 jobs:
   submodule_cache:
@@ -69,6 +67,10 @@ jobs:
         compiler: [gcc, llvm]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actionhippie/swap-space@v1
+        with:
+          size: 60G
 
       - name: Remove unneeded frameworks to recover disk space
         run: sudo ./.github/cleanup-rootfs.sh
@@ -135,6 +137,10 @@ jobs:
       smcache_key: ${{ needs.submodule_cache.outputs.key }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actionhippie/swap-space@v1
+        with:
+          size: 60G
 
       - name: Remove unneeded frameworks to recover disk space
         run: sudo ./.github/cleanup-rootfs.sh
