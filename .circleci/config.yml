@@ -13,31 +13,11 @@ parameters:
     type: string
     default: "gcc"
 
-executors:
-  build-executor:
-    machine:
-      image: ubuntu-2204:2024.11.1
-    resource_class: large
-
 jobs:
-  cleanup_rootfs:
-    executor: build-executor
-    steps:
-      - checkout
-      - run:
-          name: Remove unneeded frameworks to recover disk space
-          command: sudo .github/cleanup-rootfs.sh
-
-  setup_apt:
-    executor: build-executor
-    steps:
-      - checkout
-      - run:
-          name: install dependencies
-          command: sudo .github/setup-apt.sh
-
-  submodule_cache:
-    executor: build-executor
+  build-ubuntu-22_04:
+    machine:
+      image: ubuntu-2204:current
+      resource_class: large
     steps:
       - checkout
       - run:
@@ -46,10 +26,6 @@ jobs:
       - run:
           name: Storage size optimization
           command: git submodule foreach 'git maintenance run'
-
-  setup_swap:
-    executor: build-executor
-    steps:
       - run:
           name: Setup swap space
           command: |
@@ -57,60 +33,74 @@ jobs:
             sudo chmod 600 /swapfile
             sudo mkswap /swapfile
             sudo swapon /swapfile
-
-  build:
-    executor: build-executor
-    parameters:
-      os:
-        type: string
-      mode:
-        type: string
-      compiler:
-        type: string
-    steps:
-      - checkout
-      - attach_workspace:
-          at: .
+      - run:
+          name: install dependencies
+          command: sudo -E .github/setup-apt.sh
       - run:
           name: build toolchain
           command: |
             ./configure --prefix=/mnt/riscv --enable-multilib
             sudo mkdir /mnt/riscv
             sudo chown $(whoami):$(whoami) /mnt/riscv
-            make -j $(nproc) << parameters.mode >>
+            make -j $(nproc)
       - run:
           name: tarball build
           command: |
             du -s -h /mnt/riscv
             .github/dedup-dir.sh /mnt/riscv/
-            TOOLCHAIN_NAME="riscv-elf-<< parameters.os >>-<< parameters.compiler >>-nightly"
+            TOOLCHAIN_NAME="riscv-elf-ubuntu-22.04-gcc-nightly"
             XZ_OPT="-e -T0" tar cJvf ${TOOLCHAIN_NAME}.tar.xz -C /mnt/ riscv/
       - store_artifacts:
-          path: riscv-elf-<< parameters.os >>-<< parameters.compiler >>-nightly.tar.xz
+          path: riscv-elf-ubuntu-22.04-gcc-nightly.tar.xz
+          destination: toolchain-tarball
+
+  build-ubuntu-24_04:
+    machine:
+      image: ubuntu-2404:current
+      resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Checkout required submodules
+          command: git submodule update --init -j $(nproc) --depth 1 binutils gcc gdb glibc musl newlib pk qemu spike uclibc-ng
+      - run:
+          name: Storage size optimization
+          command: git submodule foreach 'git maintenance run'
+      - run:
+          name: Setup swap space
+          command: |
+            sudo fallocate -l 80G /swapfile
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+      - run:
+          name: install dependencies
+          command: sudo -E .github/setup-apt.sh
+      - run:
+          name: build toolchain
+          command: |
+            ./configure --prefix=/mnt/riscv --enable-multilib
+            sudo mkdir /mnt/riscv
+            sudo chown $(whoami):$(whoami) /mnt/riscv
+            make -j $(nproc)
+      - run:
+          name: tarball build
+          command: |
+            du -s -h /mnt/riscv
+            .github/dedup-dir.sh /mnt/riscv/
+            TOOLCHAIN_NAME="riscv-elf-ubuntu-24.04-gcc-nightly"
+            XZ_OPT="-e -T0" tar cJvf ${TOOLCHAIN_NAME}.tar.xz -C /mnt/ riscv/
+      - store_artifacts:
+          path: riscv-elf-ubuntu-24.04-gcc-nightly.tar.xz
           destination: toolchain-tarball
       - run:
           name: make report
           command: |
-            if [ "<< parameters.os >>" = "ubuntu-24.04" ] && ([ "<< parameters.mode >>" = "linux" ] || [ "<< parameters.mode >>" = "newlib" ]) && [ "<< parameters.compiler >>" = "gcc" ]; then
-              make report-<< parameters.mode >> -j $(nproc)
-            fi
+            make report-newlib -j $(nproc)
 
 workflows:
   version: 2
   build-and-test:
     jobs:
-      - cleanup_rootfs
-      - setup_apt
-      - submodule_cache
-      - setup_swap
-      - build:
-          requires:
-            - cleanup_rootfs
-            - setup_apt
-            - submodule_cache
-            - setup_swap
-          matrix:
-            parameters:
-              os: ["ubuntu-22.04", "ubuntu-24.04"]
-              mode: ["newlib"]
-              compiler: ["gcc"]
+      - build-ubuntu-22_04
+      - build-ubuntu-24_04
