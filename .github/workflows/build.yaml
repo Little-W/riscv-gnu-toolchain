@@ -55,22 +55,26 @@ jobs:
         run: |
           git submodule foreach 'git maintenance run'
 
+  setup_swap:
+    name: Setup swap space
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actionhippie/swap-space@v1
+        with:
+          size: 80G
+
   build:
     runs-on: ${{ matrix.os }}
-    needs: [submodule_cache]
+    needs: [submodule_cache, setup_swap]
     env:
       smcache_key: ${{ needs.submodule_cache.outputs.key }}
     strategy:
       matrix:
         os:     [ubuntu-22.04, ubuntu-24.04]
         mode:   [newlib]
-        compiler: [gcc, llvm]
+        compiler: [gcc]
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actionhippie/swap-space@v1
-        with:
-          size: 60G
 
       - name: Remove unneeded frameworks to recover disk space
         run: sudo ./.github/cleanup-rootfs.sh
@@ -86,7 +90,7 @@ jobs:
 
       - name: build toolchain
         run: |
-          BUILD_TOOLCHAIN="./configure --prefix=/mnt/riscv"
+          BUILD_TOOLCHAIN="./configure --prefix=/mnt/riscv --enable-multilib"
           if [ "${{ matrix.compiler }}" == "llvm" ]; then # build toolchain with llvm
             $BUILD_TOOLCHAIN --enable-llvm
           else
@@ -100,7 +104,7 @@ jobs:
         run: |
           du -s -h /mnt/riscv
           ./.github/dedup-dir.sh /mnt/riscv/
-          XZ_OPT="-e -T0" tar cJvf riscv.tar.xz -C /mnt/ riscv/
+          XZ_OPT="-e -T0" tar cJvf ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}.tar.xz -C /mnt/ riscv/
 
       - name: make report
         if: |
@@ -128,46 +132,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}
-          path: riscv.tar.xz
-
-  build-multilib:
-    runs-on: ubuntu-24.04
-    needs: [submodule_cache]
-    env:
-      smcache_key: ${{ needs.submodule_cache.outputs.key }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actionhippie/swap-space@v1
-        with:
-          size: 60G
-
-      - name: Remove unneeded frameworks to recover disk space
-        run: sudo ./.github/cleanup-rootfs.sh
-
-      - name: install dependencies
-        run: sudo ./.github/setup-apt.sh
-
-      - name: Load submodule cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.submodule_paths }}
-          key: ${{ env.smcache_key }}
-
-      - name: build toolchain (multilib, all targets)
-        run: |
-          ./configure --prefix=/mnt/riscv --enable-multilib
-          sudo mkdir -p /mnt/riscv
-          sudo chown runner:runner /mnt/riscv
-          make -j $(nproc)
-
-      - name: tarball build
-        run: |
-          du -s -h /mnt/riscv
-          ./.github/dedup-dir.sh /mnt/riscv/
-          XZ_OPT="-e -T0" tar cJvf riscv.tar.xz -C /mnt/ riscv/
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: open_riscv_gcc-multilib-nightly
-          path: riscv.tar.xz
+          path: ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}.tar.xz
