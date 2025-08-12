@@ -65,14 +65,8 @@ jobs:
     strategy:
       matrix:
         os:     [ubuntu-22.04, ubuntu-24.04]
-        mode:   [newlib, linux, musl, uclibc]
-        target: [rv32gc-ilp32d, rv64gc-lp64d]
+        mode:   [newlib]
         compiler: [gcc, llvm]
-        exclude:
-          - mode: musl
-            compiler: llvm
-          - mode: uclibc
-            compiler: llvm
     steps:
       - uses: actions/checkout@v4
 
@@ -90,8 +84,7 @@ jobs:
 
       - name: build toolchain
         run: |
-          TARGET_TUPLE=($(echo ${{ matrix.target }} | tr "-" "\n"))
-          BUILD_TOOLCHAIN="./configure --prefix=/mnt/riscv --with-arch=${TARGET_TUPLE[0]} --with-abi=${TARGET_TUPLE[1]}"
+          BUILD_TOOLCHAIN="./configure --prefix=/mnt/riscv"
           if [ "${{ matrix.compiler }}" == "llvm" ]; then # build toolchain with llvm
             $BUILD_TOOLCHAIN --enable-llvm
           else
@@ -118,7 +111,6 @@ jobs:
       - name: generate prebuilt toolchain name
         id:   toolchain-name-generator
         run: |
-          if [[ "${{ matrix.target }}" == *"32"* ]]; then BITS=32; else BITS=64; fi
           case "${{ matrix.mode }}" in
             "linux")
               MODE="glibc";;
@@ -129,61 +121,18 @@ jobs:
             *)
               MODE="elf";;
           esac
-          echo "TOOLCHAIN_NAME=riscv$BITS-$MODE-${{ matrix.os }}-${{ matrix.compiler }}-nightly" >> $GITHUB_OUTPUT
+          echo "TOOLCHAIN_NAME=riscv-$MODE-${{ matrix.os }}-${{ matrix.compiler }}-nightly" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}
           path: riscv.tar.xz
 
-  test-sim:
-    runs-on: ${{ matrix.os }}
-    needs: [submodule_cache]
-    env:
-      smcache_key: ${{ needs.submodule_cache.outputs.key }}
-    strategy:
-      matrix:
-        os:     [ubuntu-24.04]
-        mode:   [newlib]
-        target: [rv64gc-lp64d]
-        sim:    [spike]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Remove unneeded frameworks to recover disk space
-        run: sudo ./.github/cleanup-rootfs.sh
-
-      - name: install dependencies
-        run: sudo ./.github/setup-apt.sh
-
-      - name: Load submodule cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.submodule_paths }}
-          key: ${{ env.smcache_key }}
-
-      - name: build toolchain
-        run: |
-          TARGET_TUPLE=($(echo ${{ matrix.target }} | tr "-" "\n"))
-          ./configure --prefix=/mnt/riscv --with-arch=${TARGET_TUPLE[0]} --with-abi=${TARGET_TUPLE[1]} --with-sim=${{ matrix.sim }}
-          sudo mkdir /mnt/riscv
-          sudo chown runner:runner /mnt/riscv
-          make -j $(nproc) ${{ matrix.mode }}
-
-      - name: make report
-        run: make report-${{ matrix.mode }} -j $(nproc)
-
   build-multilib:
-    if: ${{ false }} # Disable until multilib errors are triaged
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     needs: [submodule_cache]
     env:
       smcache_key: ${{ needs.submodule_cache.outputs.key }}
-    strategy:
-      matrix:
-        os:     [ubuntu-24.04]
-        mode:   [newlib, linux]
-        target: [rv64gc-lp64d]
     steps:
       - uses: actions/checkout@v4
 
@@ -199,13 +148,12 @@ jobs:
           path: ${{ env.submodule_paths }}
           key: ${{ env.smcache_key }}
 
-      - name: build toolchain
+      - name: build toolchain (multilib, all targets)
         run: |
-          TARGET_TUPLE=($(echo ${{ matrix.target }} | tr "-" "\n"))
-          ./configure --prefix=/mnt/riscv --with-arch=${TARGET_TUPLE[0]} --with-abi=${TARGET_TUPLE[1]} --enable-multilib
-          sudo mkdir /mnt/riscv
+          ./configure --prefix=/mnt/riscv --enable-multilib
+          sudo mkdir -p /mnt/riscv
           sudo chown runner:runner /mnt/riscv
-          make -j $(nproc) ${{ matrix.mode }}
+          make -j $(nproc)
 
       - name: tarball build
         run: |
@@ -213,27 +161,7 @@ jobs:
           ./.github/dedup-dir.sh /mnt/riscv/
           XZ_OPT="-e -T0" tar cJvf riscv.tar.xz -C /mnt/ riscv/
 
-      - name: make report
-        run: |
-          make report-${{ matrix.mode }} -j $(nproc)
-
-      - name: generate prebuilt toolchain name
-        id:   toolchain-name-generator
-        run: |
-          if [[ "${{ matrix.target }}" == *"32"* ]]; then BITS=32; else BITS=64; fi
-          case "${{ matrix.mode }}" in
-            "linux")
-              MODE="glibc";;
-            "musl")
-              MODE="musl";;
-            "uclibc")
-              MODE="uclibc-ng";;
-            *)
-              MODE="elf";;
-          esac
-          echo "TOOLCHAIN_NAME=riscv$BITS-$MODE-${{ matrix.os }}-multilib-nightly" >> $GITHUB_OUTPUT
-
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}
+          name: open_riscv_gcc-multilib-nightly
           path: riscv.tar.xz

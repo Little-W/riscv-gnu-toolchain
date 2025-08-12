@@ -49,14 +49,11 @@ jobs:
     strategy:
       matrix:
         os:       [ubuntu-22.04, ubuntu-24.04]
-        mode:     [newlib, linux, musl, uclibc]
-        target:   [rv32gc-ilp32d, rv64gc-lp64d]
+        mode:     [newlib]
         compiler: [gcc, llvm]
+        multilib: [false, true]
         exclude:
-          - mode: musl
-            compiler: llvm
-
-          - mode: uclibc
+          - multilib: true
             compiler: llvm
     steps:
       - uses: actions/checkout@v4
@@ -64,13 +61,24 @@ jobs:
       - name: Remove unneeded frameworks to recover disk space
         run: sudo ./.github/cleanup-rootfs.sh
 
+      - name: Setup 50GB swap
+        run: |
+          sudo swapoff -a
+          sudo dd if=/dev/zero of=/mnt/swapfile bs=1G count=50
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          sudo swapon --show
+
       - name: install apt dependencies
         run: sudo ./.github/setup-apt.sh
 
       - name: build toolchain
         run: |
-          TARGET_TUPLE=($(echo ${{ matrix.target }} | tr "-" "\n"))
-          BUILD_TOOLCHAIN="./configure --prefix=/mnt/riscv --with-arch=${TARGET_TUPLE[0]} --with-abi=${TARGET_TUPLE[1]}"
+          BUILD_TOOLCHAIN="./configure --prefix=/mnt/riscv"
+          if [ "${{ matrix.multilib }}" == "true" ]; then
+            BUILD_TOOLCHAIN="$BUILD_TOOLCHAIN --enable-multilib"
+          fi
           if [ "${{ matrix.compiler }}" == "llvm" ]; then # build toolchain with llvm
             $BUILD_TOOLCHAIN --enable-llvm
           else
@@ -89,7 +97,6 @@ jobs:
       - name: generate prebuilt toolchain name
         id:   toolchain-name-generator
         run: |
-          if [[ "${{ matrix.target }}" == *"32"* ]]; then BITS=32; else BITS=64; fi
           case "${{ matrix.mode }}" in
             "linux")
               MODE="glibc";;
@@ -100,7 +107,11 @@ jobs:
             *)
               MODE="elf";;
           esac
-          echo "TOOLCHAIN_NAME=riscv$BITS-$MODE-${{ matrix.os }}-${{ matrix.compiler }}-nightly" >> $GITHUB_OUTPUT
+          MULTILIB_SUFFIX=""
+          if [ "${{ matrix.multilib }}" == "true" ]; then
+            MULTILIB_SUFFIX="-multilib"
+          fi
+          echo "TOOLCHAIN_NAME=riscv-$MODE-${{ matrix.os }}-${{ matrix.compiler }}${MULTILIB_SUFFIX}-nightly" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v4
         with:
