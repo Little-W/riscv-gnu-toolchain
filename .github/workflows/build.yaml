@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actionhippie/swap-space@v1
         with:
-          size: 80G
+          size: 20G
 
   build:
     runs-on: ${{ matrix.os }}
@@ -100,20 +100,6 @@ jobs:
           sudo chown runner:runner /mnt/riscv
           make -j $(nproc) ${{ matrix.mode }}
 
-      - name: tarball build
-        run: |
-          du -s -h /mnt/riscv
-          ./.github/dedup-dir.sh /mnt/riscv/
-          XZ_OPT="-e -T0" tar cJvf ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}.tar.xz -C /mnt/ riscv/
-
-      - name: make report
-        if: |
-          matrix.os == 'ubuntu-24.04'
-          && (matrix.mode == 'linux' || matrix.mode == 'newlib')
-          && matrix.compiler == 'gcc'
-        run: |
-          make report-${{ matrix.mode }} -j $(nproc)
-
       - name: generate prebuilt toolchain name
         id:   toolchain-name-generator
         run: |
@@ -129,7 +115,17 @@ jobs:
           esac
           echo "TOOLCHAIN_NAME=riscv-$MODE-${{ matrix.os }}-${{ matrix.compiler }}-nightly" >> $GITHUB_OUTPUT
 
+      - name: tarball build
+        run: |
+          du -s -h /mnt/riscv
+          ./.github/dedup-dir.sh /mnt/riscv/
+          XZ_OPT="-e -T0" tar cJvf ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}.tar.xz -C /mnt/ riscv/
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}
           path: ${{ steps.toolchain-name-generator.outputs.TOOLCHAIN_NAME }}.tar.xz
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
