@@ -9,7 +9,7 @@
 [submodule "gcc"]
 	path = gcc
 	url = https://github.com/Little-W/gcc.git
-	branch = releases/gcc-15
+	branch = gcc-16-alkaid
 	shallow = true
 [submodule "glibc"]
 	path = glibc
@@ -22,12 +22,12 @@
 	shallow = true
 [submodule "newlib"]
 	path = newlib
-	url = https://github.com/bminor/newlib.git
+	url = https://sourceware.org/git/newlib-cygwin.git
 	branch = master
 	shallow = true
 [submodule "gdb"]
 	path = gdb
-	url = https://github.com/bminor/binutils-gdb.git
+	url = https://sourceware.org/git/binutils-gdb.git
 	branch = gdb-16-branch
 	shallow = true
 [submodule "qemu"]
