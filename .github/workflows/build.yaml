@@ -14,14 +14,7 @@ env:
     binutils
     gcc
     gdb
-    glibc
-    llvm
-    musl
     newlib
-    pk
-    qemu
-    spike
-    uclibc-ng
 
 jobs:
   submodule_cache:
@@ -37,7 +30,11 @@ jobs:
 
       - name: Generate submodule cache key
         id: keygen
-        run: echo "smcache_key=smcache-$(printf $(git submodule | sha1sum))" >> $GITHUB_OUTPUT
+        shell: bash
+        run: |
+          mapfile -t paths < <(printf '%s\n' "$submodule_paths" | sed '/^$/d')
+          key="$(git submodule status -- "${paths[@]}" | sha1sum | cut -d ' ' -f1)"
+          echo "smcache_key=smcache-$key" >> "$GITHUB_OUTPUT"
 
       - name: Setup submodule cache
         id: smcache
@@ -48,12 +45,19 @@ jobs:
 
       - name: Checkout required submodules
         if: steps.smcache.outputs.cache-hit != 'true'
-        run: git submodule update --init -j $(nproc) --depth 1 $(echo ${submodule_paths} | sed '$d' | tr '\n' ' ')
+        shell: bash
+        run: |
+          mapfile -t paths < <(printf '%s\n' "$submodule_paths" | sed '/^$/d')
+          git submodule update --init -j "$(nproc)" --depth 1 "${paths[@]}"
 
       - name: Storage size optimization
         if: steps.smcache.outputs.cache-hit != 'true'
+        shell: bash
         run: |
-          git submodule foreach 'git maintenance run'
+          mapfile -t paths < <(printf '%s\n' "$submodule_paths" | sed '/^$/d')
+          for path in "${paths[@]}"; do
+            git -C "$path" maintenance run || echo "::warning::git maintenance failed in $path; continuing"
+          done
 
   setup_swap:
     name: Setup swap space
