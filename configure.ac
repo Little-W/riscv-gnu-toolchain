@@ -183,7 +183,7 @@ AS_IF([test "x$enable_multilib" != xno],
         [AC_SUBST(glibc_multilib_names,"$with_arch-$with_abi")])
 
 AS_IF([test "x$enable_multilib" != xno],
-        [AC_SUBST(newlib_multilib_names,"rv32i-ilp32 rv32iac-ilp32 rv32im-ilp32 rv32imac-ilp32 rv32imafc-ilp32f rv64im-lp64 rv64imac-lp64 rv64gc-lp64d")],
+        [AC_SUBST(newlib_multilib_names,"rv32i-ilp32 rv32iac-ilp32 rv32im-ilp32 rv32imac-ilp32 rv32imafc-ilp32f rv32imf-ilp32f rv32imfd-ilp32d rv64i-lp64 rv64im-lp64 rv64imf-lp64f rv64imfd-lp64d rv64imac-lp64 rv64gc-lp64d")],
         [AC_SUBST(newlib_multilib_names,"$with_arch-$with_abi")])
 
 AS_IF([test "x$enable_multilib" != xno],
