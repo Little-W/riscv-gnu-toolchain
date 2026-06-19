@@ -1421,7 +1421,7 @@ Optional Packages:
                           format: <arch>-<abi>;<arch>-<abi> e.g:
                           --with-extra-multilib-test="rv64gcv-lp64;rv64gcv_zba-lp64"
   --with-cmodel           Select the code model to use when building libc and
-                          libgcc [--with-cmodel=medlow]
+                          libgcc [--with-cmodel=medany]
   --with-target-cflags    Add extra target flags for C for library code
   --with-target-cxxflags  Add extra target flags for C++ for library code
   --with-host=x86_64-w64-mingw32
@@ -4204,7 +4204,7 @@ then :
   cmodel=-mcmodel=$with_cmodel
 
 else $as_nop
-  cmodel=-mcmodel=medlow
+  cmodel=-mcmodel=medany
 
 fi
 
